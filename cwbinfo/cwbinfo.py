@@ -62,7 +62,10 @@ class CWBInfo:
         """
         dis = [ [k, self.latlon_distance(lat, lon, float(v['lat']), float(v['lon']))] for k, v in self.station_data.items() ]
         dis.sort(key=lambda elem: elem[1])
-        return dis[0][0]
+        index = 0
+        while dis[index][0][:2] not in accept_type:
+            index += 1
+        return dis[index][0]
 
     def get_stations(self):
         """
@@ -74,34 +77,29 @@ class CWBInfo:
         """
         3:Temp; 1:StnPres; 5:HUMD, 6:WS, 7:WD
         """
+        st_date = st_time.date()
+        ed_date = ed_time.date()
+        st_hour = st_time.hour
+        ed_hour = ed_time.hour
         d = self.weather_data[st_id]
         ret = [[] for _ in feature_index]
-        with tqdm(total=(ed_time-st_time)/timedelta(days=1)) as pbar:
-            while st_time != ed_time:
+        with tqdm(total=(ed_date-st_date)/timedelta(days=1)) as pbar:
+            while st_date != (ed_date + timedelta(days=1)):
                 try:
-                    _d = d[st_time]
-                    for t in range(1, 24):
+                    _d = d[st_date]
+                    st_hour = 1
+                    ed_hour = 25
+                    if st_date == st_time.date():
+                        st_hour = st_time.hour+1
+                    if st_date == ed_time.date():
+                        ed_hour = ed_time.hour+1
+                    for t in range(st_hour, ed_hour):
                         for k, index in enumerate(feature_index):
                             ret[k].append(_d[t][index])
                 except Exception as ex:
                     print(ex)
                 finally:
-                    st_time += timedelta(days=1)
-                    pbar.update(1)
-        return ret
-
-
-    def get_meteo_data_in_period(self, st_id, st_time, ed_time):
-        d = self.weather_data[st_id]
-        ret = [] 
-        with tqdm(total=(ed_time-st_time)/timedelta(days=1)) as pbar:
-            while st_time != ed_time:
-                try:
-                    ret.append(d[st_time])
-                except Exception as ex:
-                    print(ex)
-                finally:
-                    st_time += timedelta(days=1)
+                    st_date += timedelta(days=1)
                     pbar.update(1)
         return ret
 
@@ -170,16 +168,17 @@ def load_model(path):
     return pickle.load(path.open('rb'))
 
 if __name__ == "__main__":
-    #  CWB = CWBInfo()
-    #  CWB.load_station_data_from_pickle('../pickle_data/stations_info.pickle')
-    #  CWB.load_weather_data_from_pickle('../pickle_data/weather_data.pickle', transform=True, missingValue=True)
-    #  CWB.normalize_data()
-    #  save_model(CWB, '../pickle_data/104_CWB_wo_normalize.pickle')
-    CWB = load_model('../pickle_data/104_CWB_wo_normalize.pickle')
+    from cwbinfo import CWBInfo
+    CWB = CWBInfo()
+    CWB.load_station_data_from_pickle('../pickle_data/stations_info.pickle')
+    CWB.load_weather_data_from_pickle('../pickle_data/weather_data.pickle', transform=True, missingValue=True)
+    CWB.normalize_data()
+    save_model(CWB.weather_data, '../pickle_data/104_CWB_w_normalize.pickle')
+    #  CWB = load_model('../pickle_data/104_CWB_wo_normalize.pickle')
 
     #st = CWB.get_nearest_weather_station(24.32323, 121.456465)
     st = CWB.get_nearest_weather_station(24.79323, 121.086465)
-    d = CWB.get_meteo_data_by_feature_index(st, date(2015, 1, 1), date(2015, 1, 3))
+    d = CWB.get_meteo_data_by_feature_index(st, datetime(2015, 1, 1, 12, 0), datetime(2015, 1, 1, 14, 0))
     pp(d)
     #print(EPA.get_data_by_station_name(st))
     print(st)
