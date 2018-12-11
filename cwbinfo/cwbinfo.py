@@ -82,7 +82,7 @@ class CWBInfo:
         st_hour = st_time.hour
         ed_hour = ed_time.hour
         d = self.weather_data[st_id]
-        ret = [[] for _ in feature_index]
+        ret = []
         with tqdm(total=(ed_date-st_date)/timedelta(days=1)) as pbar:
             while st_date != (ed_date + timedelta(days=1)):
                 try:
@@ -94,8 +94,10 @@ class CWBInfo:
                     if st_date == ed_time.date():
                         ed_hour = ed_time.hour+1
                     for t in range(st_hour, ed_hour):
+                        tmp = []
                         for k, index in enumerate(feature_index):
-                            ret[k].append(_d[t][index])
+                            tmp.append(_d[t][index])
+                        ret.append(tmp)
                 except Exception as ex:
                     print(ex)
                 finally:
