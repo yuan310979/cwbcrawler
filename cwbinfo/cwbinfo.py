@@ -1,6 +1,8 @@
 import pickle
 import re
 
+import numpy as np
+
 from math import sin, cos, sqrt, atan2, radians
 from pathlib import Path
 from tqdm import tqdm
@@ -56,16 +58,24 @@ class CWBInfo:
                     total += 1
             self.ave[st_id] = [ val/total for val in ave]
 
-    def get_nearest_weather_station(self, lat, lon, accept_type=['46','C0']):
+
+    def get_nearest_weather_station_list(self, lat, lon, accept_type=['46','C0']):
         """
         return id of nearest station within accept_type
         """
         dis = [ [k, self.latlon_distance(lat, lon, float(v['lat']), float(v['lon']))] for k, v in self.station_data.items() ]
         dis.sort(key=lambda elem: elem[1])
-        index = 0
-        while dis[index][0][:2] not in accept_type:
-            index += 1
-        return dis[index][0]
+        dis = np.array(dis)
+        slice = [st_name[0][:2] in accept_type for st_name in dis]
+        dis = dis[slice]
+
+        return dis[:,0]
+
+    def get_nearest_weather_station(self, lat, lon, accept_type=['46','C0']):
+        """
+        return id of nearest station within accept_type
+        """
+        return self.get_nearest_weather_station_list(lat, lon, accept_type)[0]
 
     def get_stations(self):
         """
@@ -81,28 +91,37 @@ class CWBInfo:
         ed_date = ed_time.date()
         st_hour = st_time.hour
         ed_hour = ed_time.hour
-        d = self.weather_data[st_id]
+        st = self.station_data[st_id]
+        st_list = self.get_nearest_weather_station_list(float(st['lat']), float(st['lon']))
+        st_index = 0
+        d = None
+        while self.weather_data.get(st_list[st_index]) == None:
+            st_index += 1
+        d = self.weather_data[st_list[st_index]]
         ret = []
-        with tqdm(total=(ed_date-st_date)/timedelta(days=1)) as pbar:
-            while st_date != (ed_date + timedelta(days=1)):
-                try:
-                    _d = d[st_date]
-                    st_hour = 1
-                    ed_hour = 25
-                    if st_date == st_time.date():
-                        st_hour = st_time.hour+1
-                    if st_date == ed_time.date():
-                        ed_hour = ed_time.hour+1
-                    for t in range(st_hour, ed_hour):
-                        tmp = []
-                        for k, index in enumerate(feature_index):
-                            tmp.append(_d[t][index])
-                        ret.append(tmp)
-                except Exception as ex:
-                    print(ex)
-                finally:
-                    st_date += timedelta(days=1)
-                    pbar.update(1)
+
+        while st_date != (ed_date + timedelta(days=1)):
+            try:
+                while d.get(st_date) == None:
+                    st_index += 1
+                    if self.weather_data.get(st_list[st_index]):
+                        d = self.weather_data[st_list[st_index]]
+                _d = d[st_date]
+                st_hour = 1
+                ed_hour = 25
+                if st_date == st_time.date():
+                    st_hour = st_time.hour+1
+                if st_date == ed_time.date():
+                    ed_hour = ed_time.hour+1
+                for t in range(st_hour, ed_hour):
+                    tmp = []
+                    for k, index in enumerate(feature_index):
+                        tmp.append(_d[t][index])
+                    ret.append(tmp)
+            except Exception as ex:
+                print(ex)
+            finally:
+                st_date += timedelta(days=1)
         return ret
 
     def process_missing_value(self):
@@ -173,17 +192,18 @@ if __name__ == "__main__":
     from cwbinfo import CWBInfo
     CWB = CWBInfo()
     CWB.load_station_data_from_pickle('../pickle_data/stations_info.pickle')
-    CWB.load_weather_data_from_pickle('../pickle_data/weather_data.pickle', transform=True, missingValue=True)
-    CWB.normalize_data()
-    save_model(CWB.weather_data, '../pickle_data/104_CWB_w_normalize.pickle')
+    CWB.load_weather_data_from_pickle('../pickle_data/weather_data(2000-2010).pickle', transform=False, missingValue=False)
+    #  CWB.normalize_data()
+    #  save_model(CWB.weather_data, '../pickle_data/89_99_CWB_w_normalize.pickle')
     #  CWB = load_model('../pickle_data/104_CWB_wo_normalize.pickle')
 
-    #st = CWB.get_nearest_weather_station(24.32323, 121.456465)
-    st = CWB.get_nearest_weather_station(24.79323, 121.086465)
-    d = CWB.get_meteo_data_by_feature_index(st, datetime(2015, 1, 1, 12, 0), datetime(2015, 1, 1, 14, 0))
+    st = CWB.get_nearest_weather_station(24.32323, 121.456465)
+    print(st)
+    #  st = CWB.get_nearest_weather_station(24.79323, 121.086465)
+    d = CWB.get_meteo_data_by_feature_index(st, datetime(2001, 1, 1, 12, 0), datetime(2001, 1, 1, 14, 0))
     pp(d)
     #print(EPA.get_data_by_station_name(st))
-    print(st)
+    #  print(st)
     #d = CWB.get_meteo_data_in_period(st, date(2015, 1, 1), date(2015, 2, 1))
 
     #pp(d)
